@@ -1,0 +1,17 @@
+﻿Tag: patch-2025-08-09_01-39-40
+Date: 2025-08-09 01:39:39
+
+Summary:
+  Modified: patch.txt, patch.txt.bak, tools/apply-from-patch.ps1
+
+Commit:
+commit 74d2a1c9c3cfa5132533ba388ab7413355b10440
+Author: Antoine F <aferedye@gmail.com>
+Date:   Sat Aug 9 01:39:40 2025 +0200
+
+    [auto] ## New patch (add @@FILE / @@CMD then Ctrl+S) (2025-08-09 01:39:39) | modified: patch.txt, patch.txt.bak, tools/apply-from-patch.ps1
+
+M	patch.txt
+M	patch.txt.bak
+M	tools/apply-from-patch.ps1
+A	tools/patch-history/patch-2025-08-09_01-18-52.txt
