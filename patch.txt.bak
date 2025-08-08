@@ -1,6 +1,5 @@
 ﻿## New patch (add @@FILE / @@CMD then Ctrl+S)
-## @@CMD composer dump-autoload -o
-## @@FILE src/Controller/PingController.php
-## <?php
-## // your code here
+## @@FILE path/to/file.ext
+## content...
 ## @@END
+## @@CMD composer dump-autoload -o
