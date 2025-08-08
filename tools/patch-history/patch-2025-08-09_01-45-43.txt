@@ -1,0 +1,16 @@
+﻿Tag: patch-2025-08-09_01-45-43
+Date: 2025-08-09 01:45:43
+
+Summary:
+  Modified: patch.txt, patch.txt.bak
+
+Commit:
+commit 69eddd6a6c85ae2ae1b89e84d4c7c19551a6225f
+Author: Antoine F <aferedye@gmail.com>
+Date:   Sat Aug 9 01:45:43 2025 +0200
+
+    [auto] ## New patch (add @@FILE / @@CMD then Ctrl+S) (2025-08-09 01:45:43) | modified: patch.txt, patch.txt.bak
+
+M	patch.txt
+M	patch.txt.bak
+A	tools/patch-history/patch-2025-08-09_01-45-28.txt
