@@ -1,7 +1,8 @@
 param(
   [string]$Patch = "patch.txt",
   [string]$Branch = "main",
-  [switch]$AutoPush = $true
+  [switch]$AutoPush = $true,
+  [switch]$NoPush
 )
 
 $ErrorActionPreference = "Stop"
@@ -105,16 +106,28 @@ if ($current -ne $Branch) {
 Info "Staging changes"
 git add -A
 
-# Commit message: 1ère ligne non vide du patch sinon timestamp
+# Build commit summary
+$summary = (git status --porcelain) -split "`r?`n" | Where-Object { $_ -ne "" }
+$added    = @($summary | Where-Object { $_ -match '^\?\?' } | ForEach-Object { $_.Substring(3) })
+$modified = @($summary | Where-Object { $_ -match '^( M|M )' } | ForEach-Object { $_.Substring(3) })
+$deleted  = @($summary | Where-Object { $_ -match '^( D|D )' } | ForEach-Object { $_.Substring(3) })
+
 $firstLine = ($raw -split "`r?`n" | Where-Object { $_.Trim() -ne "" } | Select-Object -First 1)
 if (-not $firstLine) { $firstLine = "auto patch" }
 $ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-$msg = "[auto] $firstLine ($ts)"
+
+$parts = @("[auto] $firstLine ($ts)")
+if ($added.Count)    { $parts += "added: " + ($added -join ', ') }
+if ($modified.Count) { $parts += "modified: " + ($modified -join ', ') }
+if ($deleted.Count)  { $parts += "deleted: " + ($deleted -join ', ') }
+$msg = ($parts -join " | ")
+
 Info ("Committing: " + $msg)
 git commit -m "$msg" 2>$null | Out-Null
 
-if ($AutoPush) {
-  # Set upstream if missing
+# Push?
+$doPush = $AutoPush -and (-not $NoPush)
+if ($doPush) {
   $hasRemote = (git remote 2>$null) -match '^origin$'
   if (-not $hasRemote) {
     Warn "No 'origin' remote configured. Skipping push."
@@ -122,6 +135,8 @@ if ($AutoPush) {
     Info "Pushing to origin/$Branch"
     git push -u origin $Branch
   }
+} else {
+  Warn "Skipping push (NoPush or AutoPush disabled)."
 }
 
 # Clear patch file (template)
