@@ -35,9 +35,6 @@ try {
 
   # Detect mode (diff git vs DSL)
   $diffMode = $raw -match '^\s*\*\*\*\s+Begin Patch' -or $raw -match '^\s*diff --git' -or $raw -match '^\s*Index: '
-  $written = New-Object System.Collections.Generic.List[string]
-  $ranCmds = New-Object System.Collections.Generic.List[string]
-
   function Ensure-Dir([string]$p){
     $d = Split-Path -Parent $p
     if ($d -and -not (Test-Path $d)) { New-Item -ItemType Directory -Force -Path $d | Out-Null }
@@ -70,8 +67,7 @@ try {
         Ensure-Dir $path
         $enc = New-Object System.Text.UTF8Encoding($false)
         [IO.File]::WriteAllText($path, $content, $enc)
-        $written.Add($path) | Out-Null
-        Ok ("Wrote " + $path)
+        Write-Host ("[OK]   Wrote " + $path) -ForegroundColor Green
         $i++ ; continue
       }
 
@@ -85,12 +81,11 @@ try {
           iex $cmd
           if (-not $?) { throw "Command failed: $cmd" }
           if ($LASTEXITCODE -ne $null -and $LASTEXITCODE -ne 0) { throw "Command failed (exit $LASTEXITCODE): $cmd" }
-          $ranCmds.Add($cmd) | Out-Null
         } finally { $ErrorActionPreference = $oldEA }
         $i++ ; continue
       }
 
-      Warn ("ignored: " + $line)
+      Write-Host ("[WARN] ignored: " + $line) -ForegroundColor Yellow
       $i++
     }
     Ok "DSL patch applied"
@@ -120,44 +115,75 @@ try {
   Info "Staging changes"
   git add -A
 
-  # Build commit summary
+  # Any change?
   $summary = (git status --porcelain) -split "`r?`n" | Where-Object { $_ -ne "" }
-  $added    = @($summary | Where-Object { $_ -match '^\?\?' } | ForEach-Object { $_.Substring(3) })
-  $modified = @($summary | Where-Object { $_ -match '^( M|M )' } | ForEach-Object { $_.Substring(3) })
-  $deleted  = @($summary | Where-Object { $_ -match '^( D|D )' } | ForEach-Object { $_.Substring(3) })
-
-  $firstLine = ($raw -split "`r?`n" | Where-Object { $_.Trim() -ne "" } | Select-Object -First 1)
-  if (-not $firstLine) { $firstLine = "auto patch" }
-  $ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-
-  $parts = @("[auto] $firstLine ($ts)")
-  if ($added.Count)    { $parts += "added: " + ($added -join ', ') }
-  if ($modified.Count) { $parts += "modified: " + ($modified -join ', ') }
-  if ($deleted.Count)  { $parts += "deleted: " + ($deleted -join ', ') }
-  $msg = ($parts -join " | ")
-
-  Info ("Committing: " + $msg)
-  git commit -m "$msg" 2>$null | Out-Null
-
-  # Push?
-  $doPush = (-not $NoPush) -and $AutoPush
-  if ($doPush) {
-    $hasRemote = (git remote 2>$null) -match '^origin$'
-    if (-not $hasRemote) {
-      Warn "No 'origin' remote configured. Skipping push."
-    } else {
-      Info "Pushing to origin/$Branch"
-      git push -u origin $Branch
-    }
+  if (-not $summary -or $summary.Count -eq 0) {
+    Warn "No changes to commit. Skipping commit/push/tag."
   } else {
-    Warn "Skipping push (NoPush or AutoPush disabled)."
+    $added    = @($summary | Where-Object { $_ -match '^\?\?' } | ForEach-Object { $_.Substring(3) })
+    $modified = @($summary | Where-Object { $_ -match '^( M|M )' } | ForEach-Object { $_.Substring(3) })
+    $deleted  = @($summary | Where-Object { $_ -match '^( D|D )' } | ForEach-Object { $_.Substring(3) })
+
+    $firstLine = ($raw -split "`r?`n" | Where-Object { $_.Trim() -ne "" } | Select-Object -First 1)
+    if (-not $firstLine) { $firstLine = "auto patch" }
+    $ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+
+    $parts = @("[auto] $firstLine ($ts)")
+    if ($added.Count)    { $parts += "added: " + ($added -join ', ') }
+    if ($modified.Count) { $parts += "modified: " + ($modified -join ', ') }
+    if ($deleted.Count)  { $parts += "deleted: " + ($deleted -join ', ') }
+    $msg = ($parts -join " | ")
+
+    Info ("Committing: " + $msg)
+    git commit -m "$msg" 2>$null | Out-Null
+
+    # Tagging
+    $tagName = "patch-" + (Get-Date -Format "yyyy-MM-dd_HH-mm-ss")
+    git tag $tagName 2>$null | Out-Null
+    Ok ("Tag created: " + $tagName)
+
+    # Patch history log
+    $histDir = "tools\patch-history"
+    if (-not (Test-Path $histDir)) { New-Item -ItemType Directory -Force -Path $histDir | Out-Null }
+    $logPath = Join-Path $histDir ($tagName + ".txt")
+    $commitShow = (& git show --name-status --format=medium HEAD)
+    $log = @()
+    $log += "Tag: $tagName"
+    $log += "Date: $ts"
+    $log += ""
+    $log += "Summary:"
+    if ($added.Count)    { $log += "  Added:    " + ($added -join ', ') }
+    if ($modified.Count) { $log += "  Modified: " + ($modified -join ', ') }
+    if ($deleted.Count)  { $log += "  Deleted:  " + ($deleted -join ', ') }
+    $log += ""
+    $log += "Commit:"
+    $log += $commitShow
+    Set-Content -Encoding UTF8 $logPath $log
+    Ok ("Patch history -> " + $logPath)
+
+    # Push?
+    $doPush = (-not $NoPush) -and $AutoPush
+    if ($doPush) {
+      $hasRemote = (git remote 2>$null) -match '^origin$'
+      if (-not $hasRemote) {
+        Warn "No 'origin' remote configured. Skipping push."
+      } else {
+        Info "Pushing to origin/$Branch"
+        git push -u origin $Branch
+        Info ("Pushing tag " + $tagName)
+        git push origin $tagName
+      }
+    } else {
+      Warn "Skipping push (NoPush or AutoPush disabled)."
+    }
   }
 
-  # Clear patch file (template + handy test line)
+  # Clear patch file (template + handy test lines)
   $tpl = @(
     "## New patch (add @@FILE / @@CMD then Ctrl+S)",
-    "# Quick test: uncomment the next line to verify watcher/NoPush",
+    "# Quick test: uncomment one of the next lines to verify watcher/NoPush:",
     "# @@CMD echo TEST WATCHER / NOPUSH OK",
+    "# @@CMD git checkout patch-YYYY-MM-DD_HH-mm-ss  # <- replace with a real tag name",
     "## @@FILE path/to/file.ext",
     "## content...",
     "## @@END",
