@@ -1,0 +1,10 @@
+/vendor/
+/var/
+/config/jwt/*.pem
+/.env.local
+/.idea/
+/.vscode/
+/node_modules/
+/tools/patches/
+/tools/logs/
+/tools/temp/

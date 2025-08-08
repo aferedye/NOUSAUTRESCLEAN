@@ -1,0 +1,9 @@
+api_controllers:
+  resource: ../src/Controller/Api/
+  type: attribute
+  prefix: /api/v1
+
+public_controllers:
+  resource: ../src/Controller/
+  type: attribute
+  exclude: ../src/Controller/Api/
