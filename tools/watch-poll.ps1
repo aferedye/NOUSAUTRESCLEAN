@@ -26,8 +26,9 @@ Info ("Polling " + $script:Full + " every " + $IntervalMs + "ms  (Ctrl+C to stop
 function Write-Template {
   $tpl = @(
     "## New patch (add @@FILE / @@CMD then Ctrl+S)",
-    "# Quick test: uncomment the next line to verify watcher/NoPush",
+    "# Quick test: uncomment one of the next lines to verify watcher/NoPush:",
     "# @@CMD echo TEST WATCHER / NOPUSH OK",
+    "# @@CMD git checkout patch-YYYY-MM-DD_HH-mm-ss  # remplace par un tag réel",
     "## @@CMD composer dump-autoload -o",
     "## @@FILE src/Controller/PingController.php",
     "## <?php",

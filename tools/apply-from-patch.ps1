@@ -115,6 +115,9 @@ try {
   Info "Staging changes"
   git add -A
 
+  # Tag value for template line (defaults to placeholder)
+  $tagForTpl = "patch-YYYY-MM-DD_HH-mm-ss"
+
   # Any change?
   $summary = (git status --porcelain) -split "`r?`n" | Where-Object { $_ -ne "" }
   if (-not $summary -or $summary.Count -eq 0) {
@@ -141,6 +144,7 @@ try {
     $tagName = "patch-" + (Get-Date -Format "yyyy-MM-dd_HH-mm-ss")
     git tag $tagName 2>$null | Out-Null
     Ok ("Tag created: " + $tagName)
+    $tagForTpl = $tagName
 
     # Patch history log
     $histDir = "tools\patch-history"
@@ -183,7 +187,7 @@ try {
     "## New patch (add @@FILE / @@CMD then Ctrl+S)",
     "# Quick test: uncomment one of the next lines to verify watcher/NoPush:",
     "# @@CMD echo TEST WATCHER / NOPUSH OK",
-    "# @@CMD git checkout patch-YYYY-MM-DD_HH-mm-ss  # <- replace with a real tag name",
+    "# @@CMD git checkout $tagForTpl  # dernier tag créé automatiquement",
     "## @@FILE path/to/file.ext",
     "## content...",
     "## @@END",
