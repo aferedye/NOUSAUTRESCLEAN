@@ -1,4 +1,5 @@
-﻿## New patch (add @@FILE / @@CMD then Ctrl+S)
+﻿## New patch (empty) - add @@FILE / @@CMD then Ctrl+S
+## Example:
 ## @@CMD composer dump-autoload -o
 ## @@FILE src/Controller/PingController.php
 ## <?php
