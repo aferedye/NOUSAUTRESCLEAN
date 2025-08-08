@@ -1,6 +1,6 @@
 ﻿## New patch (add @@FILE / @@CMD then Ctrl+S)
 # Quick test: uncomment one of the next lines to verify watcher/NoPush:
-# @@CMD echo TEST WATCHER / NOPUSH OK
+@@CMD echo TEST WATCHER / NOPUSH OK
 # @@CMD git checkout patch-YYYY-MM-DD_HH-mm-ss  # remplace par un tag rÃ©el
 ## @@CMD composer dump-autoload -o
 ## @@FILE src/Controller/PingController.php
