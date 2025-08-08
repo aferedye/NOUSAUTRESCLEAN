@@ -1,0 +1,19 @@
+﻿Tag: patch-2025-08-09_01-11-52
+Date: 2025-08-09 01:11:52
+
+Summary:
+  Modified: patch.txt, patch.txt.bak, tools/apply-from-patch.ps1, tools/watch-poll.ps1
+
+Commit:
+commit 79517b60a3dc416b7048a15d4c0b39a524750b23
+Author: Antoine F <aferedye@gmail.com>
+Date:   Sat Aug 9 01:11:52 2025 +0200
+
+    [auto] ## New patch (add @@FILE / @@CMD then Ctrl+S) (2025-08-09 01:11:52) | modified: patch.txt, patch.txt.bak, tools/apply-from-patch.ps1, tools/watch-poll.ps1
+
+M	patch.txt
+M	patch.txt.bak
+M	tools/apply-from-patch.ps1
+A	tools/last-tag.bat
+A	tools/patch-history/patch-2025-08-09_01-01-52.txt
+M	tools/watch-poll.ps1
