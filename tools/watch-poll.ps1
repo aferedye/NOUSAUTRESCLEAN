@@ -10,6 +10,9 @@ function Info($m){ Write-Host ("[INFO] " + $m) -ForegroundColor Cyan }
 function Ok($m){ Write-Host ("[OK]   " + $m) -ForegroundColor Green }
 function Err($m){ Write-Host ("[ERR]  " + $m) -ForegroundColor Red }
 
+# .nopush sentinel
+if (Test-Path "tools\.nopush") { $NoPush = $true }
+
 if (-not (Test-Path $PatchFile)) { New-Item -ItemType File -Path $PatchFile | Out-Null }
 $script:Full = (Resolve-Path $PatchFile).Path
 $script:ApplyScript = Join-Path (Get-Location) "tools\apply-from-patch.ps1"
@@ -23,6 +26,8 @@ Info ("Polling " + $script:Full + " every " + $IntervalMs + "ms  (Ctrl+C to stop
 function Write-Template {
   $tpl = @(
     "## New patch (add @@FILE / @@CMD then Ctrl+S)",
+    "# Quick test: uncomment the next line to verify watcher/NoPush",
+    "# @@CMD echo TEST WATCHER / NOPUSH OK",
     "## @@CMD composer dump-autoload -o",
     "## @@FILE src/Controller/PingController.php",
     "## <?php",
