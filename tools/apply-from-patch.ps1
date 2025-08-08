@@ -7,9 +7,15 @@ param(
 
 $ErrorActionPreference = "Stop"
 function Info($m){ Write-Host ("[INFO] " + $m) -ForegroundColor Cyan }
-function Ok($m){ Write-Host ("[OK] " + $m) -ForegroundColor Green }
+function Ok($m){ Write-Host ("[OK]   " + $m) -ForegroundColor Green }
 function Warn($m){ Write-Host ("[WARN] " + $m) -ForegroundColor Yellow }
-function Fail($m){ Write-Host ("[ERR] " + $m) -ForegroundColor Red }
+function Fail($m){ Write-Host ("[ERR]  " + $m) -ForegroundColor Red }
+
+# Banner mode
+$mode = if ($NoPush) { "NoPush (commit local, pas de push)" } else { "AutoPush (commit + push origin/$Branch)" }
+Write-Host "==================================================" -ForegroundColor DarkGray
+Write-Host (" APPLY PATCH - Mode: " + $mode) -ForegroundColor Magenta
+Write-Host "==================================================" -ForegroundColor DarkGray
 
 if (-not (Test-Path $Patch)) { Fail "Patch not found: $Patch"; exit 1 }
 $raw = Get-Content -Raw -Encoding UTF8 $Patch
@@ -19,7 +25,7 @@ if ([string]::IsNullOrWhiteSpace($raw)) { Warn "Patch is empty. Nothing to do.";
 Copy-Item $Patch "$Patch.bak" -Force
 Info ("Backup: $Patch.bak")
 
-# Detect mode
+# Detect mode (diff git vs DSL)
 $diffMode = $raw -match '^\s*\*\*\*\s+Begin Patch' -or $raw -match '^\s*diff --git' -or $raw -match '^\s*Index: '
 $written = New-Object System.Collections.Generic.List[string]
 $ranCmds = New-Object System.Collections.Generic.List[string]
@@ -126,7 +132,7 @@ Info ("Committing: " + $msg)
 git commit -m "$msg" 2>$null | Out-Null
 
 # Push?
-$doPush = $AutoPush -and (-not $NoPush)
+$doPush = (-not $NoPush) -and $AutoPush
 if ($doPush) {
   $hasRemote = (git remote 2>$null) -match '^origin$'
   if (-not $hasRemote) {

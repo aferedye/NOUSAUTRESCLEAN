@@ -1,2 +1,24 @@
 @echo off
-powershell -NoProfile -ExecutionPolicy Bypass -File tools\watch-poll.ps1
+cd /d "%~dp0.."
+echo ======================================
+echo   [WATCHER NousAutres] Patch Auto/NoPush
+echo ======================================
+echo.
+echo Choisis le mode :
+echo   1 - Mode NoPush (commit local seulement)
+echo   2 - Mode AutoPush (commit + push sur main)
+echo.
+
+set /p choice="Ton choix (1 ou 2) : "
+
+if "%choice%"=="1" (
+    echo [MODE] NoPush
+    powershell -ExecutionPolicy Bypass -File tools\watch-poll.ps1 -NoPush
+) else if "%choice%"=="2" (
+    echo [MODE] AutoPush
+    powershell -ExecutionPolicy Bypass -File tools\watch-poll.ps1
+) else (
+    echo Choix invalide.
+)
+
+pause
