@@ -1,4 +1,6 @@
 ﻿## New patch (add @@FILE / @@CMD then Ctrl+S)
+# Quick test: uncomment the next line to verify watcher/NoPush
+@@CMD echo TEST WATCHER / NOPUSH OK
 ## @@CMD composer dump-autoload -o
 ## @@FILE src/Controller/PingController.php
 ## <?php
