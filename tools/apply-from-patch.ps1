@@ -1,57 +1,137 @@
-param([string]$Patch = "patch.txt")
+param(
+  [string]$Patch = "patch.txt",
+  [string]$Branch = "main",
+  [switch]$AutoPush = $true
+)
+
 $ErrorActionPreference = "Stop"
-if (-not (Test-Path $Patch)) { Write-Error "Patch not found: $Patch"; exit 1 }
+function Info($m){ Write-Host ("[INFO] " + $m) -ForegroundColor Cyan }
+function Ok($m){ Write-Host ("[OK] " + $m) -ForegroundColor Green }
+function Warn($m){ Write-Host ("[WARN] " + $m) -ForegroundColor Yellow }
+function Fail($m){ Write-Host ("[ERR] " + $m) -ForegroundColor Red }
 
+if (-not (Test-Path $Patch)) { Fail "Patch not found: $Patch"; exit 1 }
 $raw = Get-Content -Raw -Encoding UTF8 $Patch
-$lines = $raw -split "`r?`n"
-$i = 0
+if ([string]::IsNullOrWhiteSpace($raw)) { Warn "Patch is empty. Nothing to do."; exit 0 }
 
-function Ensure-Dir($p){ $d = Split-Path -Parent $p; if($d){ if(-not (Test-Path $d)){ New-Item -ItemType Directory -Force -Path $d | Out-Null } } }
+# Backup
+Copy-Item $Patch "$Patch.bak" -Force
+Info ("Backup: $Patch.bak")
 
-while ($i -lt $lines.Count) {
-  $line = $lines[$i]
-  if ([string]::IsNullOrWhiteSpace($line)) { $i++; continue }
-  $t = $line.TrimStart()
-  if ($t.StartsWith("##")) { $i++; continue }
+# Detect mode
+$diffMode = $raw -match '^\s*\*\*\*\s+Begin Patch' -or $raw -match '^\s*diff --git' -or $raw -match '^\s*Index: '
+$written = New-Object System.Collections.Generic.List[string]
+$ranCmds = New-Object System.Collections.Generic.List[string]
 
-  if ($line.StartsWith("@@FILE ")) {
-    $path = $line.Substring(7).Trim().Trim('"')
-    $i++
-    $buf = New-Object System.Collections.Generic.List[string]
-    while ($i -lt $lines.Count -and $lines[$i] -ne "@@END") { $buf.Add($lines[$i]); $i++ }
-    if ($i -ge $lines.Count) { throw "Missing @@END for " + $path }
-    $content = [string]::Join("`r`n", $buf)
-    Ensure-Dir $path
-    $enc = New-Object System.Text.UTF8Encoding($false)
-    [IO.File]::WriteAllText($path, $content, $enc)
-    Write-Host "✔ Wrote $path" -ForegroundColor Green
-    $i++
-    continue
-  }
-
-  if ($line.StartsWith("@@CMD ")) {
-    $cmd = $line.Substring(6)
-    if ([string]::IsNullOrWhiteSpace($cmd)) { throw "Empty @@CMD" }
-    Write-Host "→ $cmd" -ForegroundColor Cyan
-
-    $global:LASTEXITCODE = 0
-    $oldEA = $ErrorActionPreference
-    $ErrorActionPreference = "Stop"
-    try {
-      iex $cmd
-      if (-not $?) { throw "Command failed: $cmd" }
-      if ($LASTEXITCODE -ne $null -and $LASTEXITCODE -ne 0) { throw "Command failed (exit $LASTEXITCODE): $cmd" }
-    } catch {
-      throw $_
-    } finally {
-      $ErrorActionPreference = $oldEA
-    }
-    $i++
-    continue
-  }
-
-  Write-Host "(ignored) $line" -ForegroundColor DarkGray
-  $i++
+function Ensure-Dir([string]$p){
+  $d = Split-Path -Parent $p
+  if ($d -and -not (Test-Path $d)) { New-Item -ItemType Directory -Force -Path $d | Out-Null }
 }
 
-Write-Host "✅ Patch terminé." -ForegroundColor Green
+if ($diffMode) {
+  Info "Mode: GIT DIFF"
+  $cmd = 'git apply --whitespace=fix --reject --verbose "{0}"' -f (Resolve-Path $Patch).Path
+  Info $cmd
+  iex $cmd
+  if ($LASTEXITCODE -ne 0) { Fail "git apply failed (exit $LASTEXITCODE)"; exit $LASTEXITCODE }
+  Ok "Diff applied"
+} else {
+  Info "Mode: DSL (@@FILE / @@CMD)"
+  $lines = $raw -split "`r?`n"
+  $i = 0
+  while ($i -lt $lines.Count) {
+    $line = $lines[$i]
+    if ([string]::IsNullOrWhiteSpace($line)) { $i++; continue }
+    $t = $line.TrimStart()
+    if ($t.StartsWith("##")) { $i++; continue }
+
+    if ($line.StartsWith("@@FILE ")) {
+      $path = $line.Substring(7).Trim().Trim('"')
+      $i++
+      $buf = New-Object System.Collections.Generic.List[string]
+      while ($i -lt $lines.Count -and $lines[$i] -ne "@@END") { $buf.Add($lines[$i]); $i++ }
+      if ($i -ge $lines.Count) { Fail "Missing @@END for $path"; exit 1 }
+      $content = [string]::Join("`r`n", $buf)
+      Ensure-Dir $path
+      $enc = New-Object System.Text.UTF8Encoding($false)
+      [IO.File]::WriteAllText($path, $content, $enc)
+      $written.Add($path) | Out-Null
+      Ok ("Wrote " + $path)
+      $i++ ; continue
+    }
+
+    if ($line.StartsWith("@@CMD ")) {
+      $cmd = $line.Substring(6)
+      if ([string]::IsNullOrWhiteSpace($cmd)) { Fail "Empty @@CMD"; exit 1 }
+      Info ("Run: " + $cmd)
+      $global:LASTEXITCODE = 0
+      $oldEA = $ErrorActionPreference; $ErrorActionPreference = "Stop"
+      try {
+        iex $cmd
+        if (-not $?) { throw "Command failed: $cmd" }
+        if ($LASTEXITCODE -ne $null -and $LASTEXITCODE -ne 0) { throw "Command failed (exit $LASTEXITCODE): $cmd" }
+        $ranCmds.Add($cmd) | Out-Null
+      } finally { $ErrorActionPreference = $oldEA }
+      $i++ ; continue
+    }
+
+    Warn ("ignored: " + $line)
+    $i++
+  }
+  Ok "DSL patch applied"
+}
+
+# Git add/commit/push
+git rev-parse --is-inside-work-tree 2>$null | Out-Null
+if ($LASTEXITCODE -ne 0) {
+  Info "Initializing git repository"
+  git init | Out-Null
+}
+
+# Ensure branch exists and checked out
+$current = (git rev-parse --abbrev-ref HEAD 2>$null).Trim()
+if (-not $current) { $current = "" }
+if ($current -ne $Branch) {
+  git rev-parse --verify $Branch 2>$null | Out-Null
+  if ($LASTEXITCODE -ne 0) {
+    Info "Creating branch $Branch"
+    git checkout -b $Branch | Out-Null
+  } else {
+    Info "Checkout $Branch"
+    git checkout $Branch | Out-Null
+  }
+}
+
+Info "Staging changes"
+git add -A
+
+# Commit message: 1ère ligne non vide du patch sinon timestamp
+$firstLine = ($raw -split "`r?`n" | Where-Object { $_.Trim() -ne "" } | Select-Object -First 1)
+if (-not $firstLine) { $firstLine = "auto patch" }
+$ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+$msg = "[auto] $firstLine ($ts)"
+Info ("Committing: " + $msg)
+git commit -m "$msg" 2>$null | Out-Null
+
+if ($AutoPush) {
+  # Set upstream if missing
+  $hasRemote = (git remote 2>$null) -match '^origin$'
+  if (-not $hasRemote) {
+    Warn "No 'origin' remote configured. Skipping push."
+  } else {
+    Info "Pushing to origin/$Branch"
+    git push -u origin $Branch
+  }
+}
+
+# Clear patch file (template)
+$tpl = @(
+  "## New patch (add @@FILE / @@CMD then Ctrl+S)",
+  "## @@FILE path/to/file.ext",
+  "## content...",
+  "## @@END",
+  "## @@CMD composer dump-autoload -o"
+)
+Set-Content -Encoding UTF8 $Patch $tpl
+Ok "Patch file cleared"
+Ok "Done"
